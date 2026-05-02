@@ -976,18 +976,28 @@ export async function createRide(payload: {
   location: string;
   description: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Not authenticated" };
-  const { error } = await supabase.from("crew_rides").insert({
+  // Use getSession (cached) — same pattern as all other write functions in this file.
+  // getUser() does a server round-trip and can return a different auth state than the
+  // JWT the Supabase client actually attaches to requests, causing RLS failures.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return { success: false, error: "Not authenticated" };
+
+  const insertPayload = {
     crew_id: payload.crewId,
-    created_by: user.id,
+    created_by: session.user.id,
     title: payload.title.trim(),
     ride_date: payload.rideDate,
     ride_time: payload.rideTime || null,
     location: payload.location.trim() || null,
     description: payload.description.trim() || null,
-  });
-  if (error) return { success: false, error: error.message };
+  };
+  console.log("[createRide] inserting payload:", insertPayload);
+
+  const { error } = await supabase.from("crew_rides").insert(insertPayload);
+  if (error) {
+    console.error("[createRide] insert error:", error.message, error);
+    return { success: false, error: error.message };
+  }
   return { success: true };
 }
 
@@ -1028,6 +1038,12 @@ export async function toggleRSVP(
   rideId: number,
   userId: string,
 ): Promise<{ going: boolean; error?: string }> {
+  // Verify the session is live before attempting any writes
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user || session.user.id !== userId) {
+    return { going: false, error: "Not authenticated" };
+  }
+
   const { data: existing } = await supabase
     .from("ride_rsvps")
     .select("ride_id")
@@ -1041,13 +1057,19 @@ export async function toggleRSVP(
       .delete()
       .eq("ride_id", rideId)
       .eq("user_id", userId);
-    if (error) return { going: true, error: error.message };
+    if (error) {
+      console.error("[toggleRSVP] delete error:", error.message);
+      return { going: true, error: error.message };
+    }
     return { going: false };
   } else {
     const { error } = await supabase
       .from("ride_rsvps")
       .insert({ ride_id: rideId, user_id: userId });
-    if (error) return { going: false, error: error.message };
+    if (error) {
+      console.error("[toggleRSVP] insert error:", error.message);
+      return { going: false, error: error.message };
+    }
     return { going: true };
   }
 }
