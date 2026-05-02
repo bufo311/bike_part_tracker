@@ -3,13 +3,13 @@ import { useLocation } from "wouter";
 import {
   Users, MapPin, ArrowLeft, Copy, CheckCheck, ShieldCheck,
   Bike, ChevronRight, ChevronLeft, Zap, AlertCircle, Loader2,
-  Palette, Save, ImagePlus, X,
+  Palette, Save, ImagePlus, X, CalendarDays, Clock, Plus,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getCrewById, getCrewMembers, getCrewBikes, getCrewActivities, getMyCrewIds, joinCrewById,
-  updateCrewTheme, updateCrewImages,
-  type Crew, type CrewMember, type Bike as BikeType, type Activity, type CrewTheme,
+  updateCrewTheme, updateCrewImages, createRide, fetchCrewRides, toggleRSVP,
+  type Crew, type CrewMember, type Bike as BikeType, type Activity, type CrewTheme, type CrewRide,
 } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { CrewChat } from "@/components/CrewChat";
@@ -336,6 +336,90 @@ function CrewBikesList({ bikes, currentUserId }: { bikes: BikeType[]; currentUse
   );
 }
 
+// ── Ride date helpers ─────────────────────────────────────────────────────────
+function parseDateStr(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatRideDate(dateStr: string): string {
+  const d = parseDateStr(dateStr);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function formatRideTime(t: string): string {
+  const parts = t.split(":");
+  const h = parseInt(parts[0], 10);
+  const m = parts[1] ?? "00";
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${m} ${ampm}`;
+}
+
+// ── Crew ride card (compact, used within CrewPage) ────────────────────────────
+function CrewRideCard({
+  ride,
+  userId,
+  onToggleRSVP,
+  accentColor,
+}: {
+  ride: CrewRide;
+  userId?: string;
+  onToggleRSVP: (ride: CrewRide) => void;
+  accentColor: string;
+}) {
+  const going = userId ? ride.rsvpUserIds.includes(userId) : false;
+  return (
+    <div
+      className="rounded-2xl border-2 border-gray-200 overflow-hidden"
+      style={{ backgroundColor: "var(--crew-surface)" }}
+    >
+      <div className="px-4 py-3 space-y-1.5">
+        <p className="text-sm font-black text-gray-900 uppercase tracking-tight leading-tight">
+          {ride.title}
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <CalendarDays size={12} className="text-gray-400 shrink-0" />
+            <span className="text-xs font-bold text-gray-700">{formatRideDate(ride.rideDate)}</span>
+          </div>
+          {ride.rideTime && (
+            <div className="flex items-center gap-1.5">
+              <Clock size={12} className="text-gray-400 shrink-0" />
+              <span className="text-xs font-bold text-gray-700">{formatRideTime(ride.rideTime)}</span>
+            </div>
+          )}
+        </div>
+        {ride.location && (
+          <p className="text-xs text-gray-500 font-medium">📍 {ride.location}</p>
+        )}
+        {ride.description && (
+          <p className="text-xs text-gray-400 font-medium leading-relaxed line-clamp-2">
+            {ride.description}
+          </p>
+        )}
+      </div>
+      <div className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between">
+        <span className="text-[11px] font-bold text-gray-400">
+          {ride.rsvpCount} {ride.rsvpCount === 1 ? "going" : "going"}
+        </span>
+        {userId && (
+          <button
+            onClick={() => onToggleRSVP(ride)}
+            className="px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors"
+            style={
+              going
+                ? { backgroundColor: "#f3f4f6", color: "#4b5563" }
+                : { backgroundColor: accentColor, color: "#ffffff" }
+            }
+          >
+            {going ? "Cancel RSVP" : "I'm Going!"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 type Tab = "chat" | "bikes" | "rides";
 
@@ -343,7 +427,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   const tabs: { id: Tab; label: string }[] = [
     { id: "chat", label: "Chat" },
     { id: "bikes", label: "Bikes" },
-    { id: "rides", label: "Activity" },
+    { id: "rides", label: "Rides" },
   ];
   return (
     <div className="flex rounded-2xl border-2 border-gray-200 p-1 gap-1" style={{ backgroundColor: "var(--crew-surface)" }}>
@@ -388,13 +472,26 @@ export default function CrewPage({ params }: { params: { id: string } }) {
   const [, setLocation] = useLocation();
   const { session } = useAuth();
 
+  // Crew rides + schedule form state
+  const [crewRides, setCrewRides] = useState<CrewRide[]>([]);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [rideTitle, setRideTitle] = useState("");
+  const [rideDate, setRideDate] = useState("");
+  const [rideTime, setRideTime] = useState("");
+  const [rideLocation, setRideLocation] = useState("");
+  const [rideDesc, setRideDesc] = useState("");
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   const loadPage = async () => {
-    const [crewData, memberData, bikeData, activityData, myIds] = await Promise.all([
+    const [crewData, memberData, bikeData, activityData, myIds, ridesData] = await Promise.all([
       getCrewById(params.id),
       getCrewMembers(params.id),
       getCrewBikes(params.id),
       getCrewActivities(params.id),
       getMyCrewIds(),
+      fetchCrewRides(params.id),
     ]);
     setCrew(crewData);
     if (crewData?.themeSettings) setLocalTheme(crewData.themeSettings);
@@ -402,6 +499,7 @@ export default function CrewPage({ params }: { params: { id: string } }) {
     setMembers(memberData);
     setBikes(bikeData);
     setActivities(activityData);
+    setCrewRides(ridesData);
 
     if (crewData && session?.user.id) {
       if (session.user.id === crewData.adminId) {
@@ -419,6 +517,49 @@ export default function CrewPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     loadPage().finally(() => setLoading(false));
   }, [params.id, session?.user.id]);
+
+  const resetScheduleForm = () => {
+    setRideTitle(""); setRideDate(""); setRideTime("");
+    setRideLocation(""); setRideDesc(""); setScheduleError(null);
+    setShowScheduleForm(false);
+  };
+
+  const handleScheduleRide = async () => {
+    if (!crew || !rideTitle.trim() || !rideDate) return;
+    setScheduleSaving(true);
+    setScheduleError(null);
+    const res = await createRide({
+      crewId: crew.id,
+      title: rideTitle,
+      rideDate,        // YYYY-MM-DD from the date input — no Date() conversion
+      rideTime,
+      location: rideLocation,
+      description: rideDesc,
+    });
+    setScheduleSaving(false);
+    if (!res.success) { setScheduleError(res.error ?? "Could not create ride"); return; }
+    resetScheduleForm();
+    setCrewRides(await fetchCrewRides(crew.id));
+  };
+
+  const handleCrewRideRSVP = async (ride: CrewRide) => {
+    const userId = session?.user.id;
+    if (!userId) return;
+    const going = ride.rsvpUserIds.includes(userId);
+    setCrewRides(prev => prev.map(r => r.id === ride.id ? {
+      ...r,
+      rsvpCount: going ? r.rsvpCount - 1 : r.rsvpCount + 1,
+      rsvpUserIds: going ? r.rsvpUserIds.filter(id => id !== userId) : [...r.rsvpUserIds, userId],
+    } : r));
+    const result = await toggleRSVP(ride.id, userId);
+    if (result.error) {
+      setCrewRides(prev => prev.map(r => r.id === ride.id ? {
+        ...r,
+        rsvpCount: going ? r.rsvpCount + 1 : r.rsvpCount - 1,
+        rsvpUserIds: going ? [...r.rsvpUserIds, userId] : r.rsvpUserIds.filter(id => id !== userId),
+      } : r));
+    }
+  };
 
   const saveTheme = async () => {
     if (!crew) return;
@@ -735,8 +876,151 @@ export default function CrewPage({ params }: { params: { id: string } }) {
                 </motion.div>
               )}
               {activeTab === "rides" && (
-                <motion.div key="rides" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
-                  <CrewActivityFeed activities={activities} />
+                <motion.div key="rides" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }} className="space-y-4">
+
+                  {/* Schedule ride: button or expanded form */}
+                  {(membershipStatus === "member" || membershipStatus === "admin") && (
+                    <div className="rounded-3xl border-2 border-gray-200 overflow-hidden" style={{ backgroundColor: "var(--crew-surface)" }}>
+                      {!showScheduleForm ? (
+                        <button
+                          onClick={() => setShowScheduleForm(true)}
+                          className="w-full flex items-center gap-2.5 px-4 py-3.5 text-left transition-opacity hover:opacity-90"
+                          style={{ backgroundColor: localTheme.accent }}
+                        >
+                          <CalendarDays size={16} className="text-white shrink-0" strokeWidth={2} />
+                          <span className="text-sm font-black text-white uppercase tracking-widest flex-1">
+                            Schedule a Group Ride
+                          </span>
+                          <Plus size={16} className="text-white shrink-0" strokeWidth={2.5} />
+                        </button>
+                      ) : (
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CalendarDays size={14} className="text-gray-500" strokeWidth={2} />
+                              <span className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                                Schedule a Group Ride
+                              </span>
+                            </div>
+                            <button
+                              onClick={resetScheduleForm}
+                              className="p-1 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                            >
+                              <X size={15} strokeWidth={2.5} />
+                            </button>
+                          </div>
+
+                          {/* Title */}
+                          <input
+                            type="text"
+                            placeholder="Ride title *"
+                            value={rideTitle}
+                            onChange={e => setRideTitle(e.target.value)}
+                            className="w-full px-3 py-2.5 rounded-2xl border-2 border-gray-200 bg-gray-50 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-red-300 transition-colors"
+                          />
+
+                          {/* Date + time row */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                                Date *
+                              </label>
+                              <input
+                                type="date"
+                                value={rideDate}
+                                min={todayStr}
+                                onChange={e => setRideDate(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-2xl border-2 border-gray-200 bg-gray-50 text-sm font-medium text-gray-900 focus:outline-none focus:border-red-300 transition-colors"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                                Time
+                              </label>
+                              <input
+                                type="time"
+                                value={rideTime}
+                                onChange={e => setRideTime(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-2xl border-2 border-gray-200 bg-gray-50 text-sm font-medium text-gray-900 focus:outline-none focus:border-red-300 transition-colors"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Location */}
+                          <input
+                            type="text"
+                            placeholder="Location (optional)"
+                            value={rideLocation}
+                            onChange={e => setRideLocation(e.target.value)}
+                            className="w-full px-3 py-2.5 rounded-2xl border-2 border-gray-200 bg-gray-50 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-red-300 transition-colors"
+                          />
+
+                          {/* Description */}
+                          <textarea
+                            placeholder="Description (optional)"
+                            value={rideDesc}
+                            onChange={e => setRideDesc(e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2.5 rounded-2xl border-2 border-gray-200 bg-gray-50 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-red-300 transition-colors resize-none"
+                          />
+
+                          {scheduleError && (
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">
+                              <AlertCircle size={12} />
+                              {scheduleError}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={resetScheduleForm}
+                              className="flex-1 py-2.5 rounded-2xl border-2 border-gray-200 text-xs font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleScheduleRide}
+                              disabled={scheduleSaving || !rideTitle.trim() || !rideDate}
+                              className="flex-[2] flex items-center justify-center gap-2 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-white transition-colors disabled:opacity-40"
+                              style={{ backgroundColor: localTheme.accent }}
+                            >
+                              {scheduleSaving ? (
+                                <><Loader2 size={13} className="animate-spin" /> Saving…</>
+                              ) : (
+                                <><CalendarDays size={13} /> Schedule Ride</>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Upcoming crew rides */}
+                  {crewRides.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">
+                        Upcoming Rides
+                      </p>
+                      {crewRides.map(ride => (
+                        <CrewRideCard
+                          key={ride.id}
+                          ride={ride}
+                          userId={session?.user.id}
+                          onToggleRSVP={handleCrewRideRSVP}
+                          accentColor={localTheme.accent}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Activity feed */}
+                  <div>
+                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1 mb-2">
+                      Activity
+                    </p>
+                    <CrewActivityFeed activities={activities} />
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

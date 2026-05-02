@@ -929,3 +929,125 @@ export async function sendCrewMessage(
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
+
+// ── Community Rides ───────────────────────────────────────────────────────────
+
+export interface CrewRide {
+  id: number;
+  crewId: string;
+  createdBy: string;
+  title: string;
+  rideDate: string;        // YYYY-MM-DD — stored directly, never converted through Date()
+  rideTime: string | null; // "HH:MM:SS" from Postgres time, or null
+  location: string | null;
+  description: string | null;
+  crewName: string;
+  crewBannerUrl: string | null;
+  rsvpCount: number;
+  rsvpUserIds: string[];
+}
+
+function mapCrewRideRow(r: Record<string, unknown>): CrewRide {
+  const crew = (r.crews as Record<string, unknown> | null);
+  const rsvps = (r.ride_rsvps as Record<string, unknown>[] | null) ?? [];
+  const bannerImages = (crew?.banner_images as string[] | null) ?? [];
+  const bannerImageUrl = (crew?.banner_image_url as string | null) ?? null;
+  return {
+    id: r.id as number,
+    crewId: r.crew_id as string,
+    createdBy: r.created_by as string,
+    title: r.title as string,
+    rideDate: r.ride_date as string,
+    rideTime: (r.ride_time as string | null) ?? null,
+    location: (r.location as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    crewName: (crew?.name as string) ?? "Unknown Crew",
+    crewBannerUrl: bannerImages[0] ?? bannerImageUrl,
+    rsvpCount: rsvps.length,
+    rsvpUserIds: rsvps.map(rv => rv.user_id as string),
+  };
+}
+
+export async function createRide(payload: {
+  crewId: string;
+  title: string;
+  rideDate: string;    // YYYY-MM-DD — saved directly, no TZ conversion
+  rideTime: string;
+  location: string;
+  description: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+  const { error } = await supabase.from("crew_rides").insert({
+    crew_id: payload.crewId,
+    created_by: user.id,
+    title: payload.title.trim(),
+    ride_date: payload.rideDate,
+    ride_time: payload.rideTime || null,
+    location: payload.location.trim() || null,
+    description: payload.description.trim() || null,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function fetchUpcomingRides(): Promise<CrewRide[]> {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  try {
+    const { data, error } = await supabase
+      .from("crew_rides")
+      .select("*, crews(name, banner_images, banner_image_url), ride_rsvps(user_id)")
+      .gte("ride_date", todayStr)
+      .order("ride_date", { ascending: true });
+    if (error) { console.warn("[fetchUpcomingRides]", error.message); return []; }
+    return ((data ?? []) as Record<string, unknown>[]).map(mapCrewRideRow);
+  } catch (e) {
+    console.warn("[fetchUpcomingRides] unexpected:", e);
+    return [];
+  }
+}
+
+export async function fetchCrewRides(crewId: string): Promise<CrewRide[]> {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  try {
+    const { data, error } = await supabase
+      .from("crew_rides")
+      .select("*, crews(name, banner_images, banner_image_url), ride_rsvps(user_id)")
+      .eq("crew_id", crewId)
+      .gte("ride_date", todayStr)
+      .order("ride_date", { ascending: true });
+    if (error) { console.warn("[fetchCrewRides]", error.message); return []; }
+    return ((data ?? []) as Record<string, unknown>[]).map(mapCrewRideRow);
+  } catch (e) {
+    console.warn("[fetchCrewRides] unexpected:", e);
+    return [];
+  }
+}
+
+export async function toggleRSVP(
+  rideId: number,
+  userId: string,
+): Promise<{ going: boolean; error?: string }> {
+  const { data: existing } = await supabase
+    .from("ride_rsvps")
+    .select("ride_id")
+    .eq("ride_id", rideId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("ride_rsvps")
+      .delete()
+      .eq("ride_id", rideId)
+      .eq("user_id", userId);
+    if (error) return { going: true, error: error.message };
+    return { going: false };
+  } else {
+    const { error } = await supabase
+      .from("ride_rsvps")
+      .insert({ ride_id: rideId, user_id: userId });
+    if (error) return { going: false, error: error.message };
+    return { going: true };
+  }
+}

@@ -1,7 +1,7 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Warehouse, Calculator, Bike, Users } from "lucide-react";
+import { Warehouse, Calculator, Bike, Users, CalendarDays } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Login from "@/pages/Login";
 import UsernameSetup from "@/pages/UsernameSetup";
@@ -11,6 +11,7 @@ import ProfileSetup from "@/pages/ProfileSetup";
 import CalculatorPage from "@/pages/Calculator";
 import CrewDirectory from "@/pages/CrewDirectory";
 import CrewPage from "@/pages/CrewPage";
+import RideBoard from "@/pages/RideBoard";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ReleaseModal } from "@/components/ReleaseModal";
 import { useState, useEffect, useRef } from "react";
@@ -72,7 +73,8 @@ function BottomNav() {
   const tabs = [
     { path: "/", label: "Garage", icon: Warehouse },
     { path: "/crews", label: "Crews", icon: Users },
-    { path: "/calculator", label: "Calculator", icon: Calculator },
+    { path: "/rides", label: "Rides", icon: CalendarDays },
+    { path: "/calculator", label: "Calc", icon: Calculator },
   ];
 
   const active = (path: string) => {
@@ -119,6 +121,7 @@ function Router() {
         <Route path="/bikes/:id/settings" component={ProfileSetup} />
         <Route path="/crews" component={CrewDirectory} />
         <Route path="/crews/:id" component={CrewPage} />
+        <Route path="/rides" component={RideBoard} />
         <Route path="/calculator" component={CalculatorPage} />
         <Route>
           <div className="min-h-[100dvh] flex flex-col items-center justify-center text-center px-4 bg-amber-50">
