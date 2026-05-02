@@ -12,11 +12,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # THIS IS THE MAGIC MAP: Tell GitHub to walk into the app folder first!
-    defaults:
-      run:
-        working-directory: ./artifacts/bike-tracker
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,15 +22,18 @@ jobs:
           node-version: 20
 
       - name: Install Dependencies
+        # Runs in the main hallway so it finds the Replit catalog!
         run: npx pnpm install
 
       - name: Build
-        run: npx pnpm run build
+        # Walks into the room specifically to build the app
+        run: |
+          cd artifacts/bike-tracker
+          npx pnpm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Tell it exactly where the baked files end up
           path: ./artifacts/bike-tracker/dist/public
 
   deploy:
