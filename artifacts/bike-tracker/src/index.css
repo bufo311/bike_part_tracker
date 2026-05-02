@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Teko:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Teko', sans-serif;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-status-good: hsl(var(--status-good));
+  --color-status-warning: hsl(var(--status-warning));
+  --color-status-replace: hsl(var(--status-replace));
+
+  --animate-pulse-fast: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  
+  @keyframes pulse-fast {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+}
+
+:root {
+  /* Main Background & Text */
+  --background: 45 71% 95%;
+  --foreground: 200 100% 20%;
+
+  /* Sage Green (Primary) */
+  --primary: 105 15% 52%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Warm Orange (Secondary) */
+  --secondary: 30 88% 67%;
+  --secondary-foreground: 200 100% 20%;
+
+  /* Soft Teal (Accent) */
+  --accent: 171 20% 81%;
+  --accent-foreground: 200 100% 20%;
+
+  /* Cards and Borders */
+  --card: 0 0% 100%;
+  --card-foreground: 200 100% 20%;
+  --border: 220 15% 88%;
+  --input: 220 15% 85%;
+  --ring: 105 15% 52%;
+
+  /* Earthy Status Colors */
+  --status-good: 112 27% 44%;
+  --status-warning: 41 72% 59%;
+  --status-replace: 7 43% 52%;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased font-sans min-h-screen;
+    background-color: hsl(45, 71%, 95%);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-wide;
+  }
+}
+
+/* Scrollbar styling for a premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-800 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-700;
+}

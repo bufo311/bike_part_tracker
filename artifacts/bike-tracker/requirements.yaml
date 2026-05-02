@@ -1,0 +1,16 @@
+packages:
+  "framer-motion": "For smooth sheet animations, pulsing visualizer dots, and high-energy transitions"
+  "date-fns": "For formatting component installation dates and replacement estimates"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging Tailwind CSS classes safely"
+  "react-hook-form": "For robust handling of the rider profile and component replacement forms"
+  "@hookform/resolvers": "For Zod schema validation integration with react-hook-form"
+
+images:
+  - path: "artifacts/bike-tracker/public/images/asphalt-texture.png"
+    description: "Dark, gritty asphalt or carbon fiber texture, deep charcoal and black, high contrast, suitable for a dark mode sports app background"
+    aspect_ratio: "16:9"
+
+notes:
+  - "Assuming React Query hooks and types are correctly exported from @workspace/api-client-react"
+  - "The app defaults to dark mode for a premium, high-energy sports aesthetic"
