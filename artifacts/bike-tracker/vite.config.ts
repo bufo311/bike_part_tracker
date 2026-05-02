@@ -9,7 +9,8 @@ const port = rawPort ? Number(rawPort) : 3000;
 
 // BASE_PATH defaults to './' so a plain `vite build` produces relative-path
 // asset URLs compatible with GitHub Pages and other static hosts.
-const basePath = process.env.BASE_PATH ?? "https://bufo311.github.io/bike_part_tracker/";
+// Changed from the full URL to strictly the repository path
+const basePath = process.env.BASE_PATH ?? "/bike_part_tracker/";
 
 export default defineConfig({
   base: basePath,
@@ -58,3 +59,4 @@ export default defineConfig({
     allowedHosts: true,
   },
 });
+
