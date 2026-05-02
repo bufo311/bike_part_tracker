@@ -4,7 +4,6 @@ on:
   push:
     branches: ["main"]
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
@@ -13,6 +12,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # THIS IS THE MAGIC MAP: Tell GitHub to walk into the app folder first!
+    defaults:
+      run:
+        working-directory: ./artifacts/bike-tracker
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,7 +25,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # We removed the strict caching requirement here!
 
       - name: Install Dependencies
         run: npx pnpm install
@@ -32,7 +35,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist/public
+          # Tell it exactly where the baked files end up
+          path: ./artifacts/bike-tracker/dist/public
 
   deploy:
     environment:
