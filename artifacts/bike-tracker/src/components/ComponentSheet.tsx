@@ -5,6 +5,13 @@ import { X, Wrench, Calendar, Clock, ArrowRight, Timer, Pencil, Infinity } from 
 import { cn } from "@/lib/utils";
 import { saveComponent, insertActivity, type Bike, type Component } from "@/lib/data";
 
+// Parse a YYYY-MM-DD string into a local Date for display with date-fns.
+// Using new Date(str) would interpret as UTC midnight and shift the displayed day in non-UTC zones.
+function parseDateStr(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 type BikeComponentType =
   | "chain" | "cassette" | "chainring"
   | "front_sealant" | "rear_sealant"
@@ -75,7 +82,8 @@ export const ComponentSheet: React.FC<ComponentSheetProps> = ({
   };
 
   const openEdit = () => {
-    setInstallDate(component ? format(new Date(component.installedAt), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"));
+    // component.installedAt is already a YYYY-MM-DD string — use it directly
+    setInstallDate(component ? component.installedAt : format(new Date(), "yyyy-MM-dd"));
     setLifespanDays(component?.lifespanDays ?? "");
     setBrandModel(component?.brandModel ?? "");
     setIsLifetime(component?.isLifetime ?? false);
@@ -102,7 +110,7 @@ export const ComponentSheet: React.FC<ComponentSheetProps> = ({
         componentId: component?.id,
         bikeId,
         componentType: effectiveType,
-        installedAt: new Date(installDate).toISOString(),
+        installedAt: installDate, // YYYY-MM-DD string — Supabase stores as UTC midnight
         lifespanDays: lifespanVal,
         brandModel: brandModel.trim() || null,
         notes: component?.notes ?? null,
@@ -203,7 +211,7 @@ export const ComponentSheet: React.FC<ComponentSheetProps> = ({
                             <p className="text-xs font-bold text-violet-400 uppercase tracking-widest">Tracking Indefinitely</p>
                             <p className="text-2xl font-bold text-violet-700">{component.daysInstalled} days</p>
                             <p className="text-sm font-medium text-violet-500">
-                              Installed on {format(new Date(component.installedAt), "MMMM d, yyyy")}
+                              Installed on {format(parseDateStr(component.installedAt), "MMMM d, yyyy")}
                             </p>
                           </div>
                           {component.brandModel && (
@@ -252,7 +260,7 @@ export const ComponentSheet: React.FC<ComponentSheetProps> = ({
                                 <Calendar size={12} />
                                 <span className="text-xs font-bold uppercase tracking-wider">Installed</span>
                               </div>
-                              <p className="text-sm font-bold text-gray-800">{format(new Date(component.installedAt), "MMM d, yy")}</p>
+                              <p className="text-sm font-bold text-gray-800">{format(parseDateStr(component.installedAt), "MMM d, yy")}</p>
                             </div>
                           </div>
                         </>

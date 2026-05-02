@@ -77,10 +77,33 @@ function computeEstimatedDays(componentType: string, bike: Bike): number {
   return Math.round(base * freqMult * styleMult * hoursMult);
 }
 
+// Parse a YYYY-MM-DD string into UTC midnight milliseconds (timezone-safe).
+function utcDayMs(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+// Extract the canonical YYYY-MM-DD date from any ISO timestamp string.
+// Supabase stores dates as UTC midnight, so the UTC date part is the canonical date.
+function isoToDateStr(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+// Today's date as a UTC YYYY-MM-DD string — consistent with how we store dates.
+function utcTodayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function enrichRow(row: Record<string, unknown>, bike: Bike): Component {
-  const installedAt = new Date(row.installed_at as string);
-  const now = new Date();
-  const daysInstalled = Math.floor((now.getTime() - installedAt.getTime()) / 86400000);
+  // Always work with the canonical YYYY-MM-DD date string.
+  // Supabase stores installed_at as UTC midnight, so slicing the ISO string
+  // gives us the exact calendar date the user entered, timezone-agnostic.
+  const dateStr = isoToDateStr(row.installed_at as string);
+  const todayStr = utcTodayStr();
+
+  // Both sides are UTC midnight — diff is always an exact whole number of days.
+  const daysInstalled = Math.max(0, Math.floor((utcDayMs(todayStr) - utcDayMs(dateStr)) / 86400000));
+
   const isLifetime = (row.is_lifetime as boolean | null) ?? false;
 
   if (isLifetime) {
@@ -88,7 +111,7 @@ function enrichRow(row: Record<string, unknown>, bike: Bike): Component {
       id: row.id as number,
       bikeId: row.bike_id as number,
       componentType: row.component_type as string,
-      installedAt: installedAt.toISOString(),
+      installedAt: dateStr,
       lifespanDays: null,
       brandModel: (row.brand_model as string | null) ?? null,
       notes: row.notes as string | null,
@@ -108,7 +131,7 @@ function enrichRow(row: Record<string, unknown>, bike: Bike): Component {
     id: row.id as number,
     bikeId: row.bike_id as number,
     componentType: row.component_type as string,
-    installedAt: installedAt.toISOString(),
+    installedAt: dateStr,
     lifespanDays,
     brandModel: (row.brand_model as string | null) ?? null,
     notes: row.notes as string | null,
@@ -244,7 +267,7 @@ export async function saveComponent(args: {
   const payload = {
     bike_id: bikeId,
     component_type: componentType,
-    installed_at: new Date(installedAt).toISOString(),
+    installed_at: installedAt, // YYYY-MM-DD — stored as UTC midnight by Supabase
     lifespan_days: isLifetime ? null : lifespanDays,
     brand_model: brandModel,
     notes,
