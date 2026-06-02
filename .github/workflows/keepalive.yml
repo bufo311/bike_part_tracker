@@ -11,6 +11,6 @@ jobs:
     steps:
       - name: Ping Supabase REST API
         run: |
-          curl -X GET "https://bjjagqcvcpxjambklagd.supabase.co/rest/v1/" \
+          curl -X GET "https://bjjagqcvcpxjambklagd.supabase.co/rest/v1/crew_rides?select=*&limit=1" \
           -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqamFncWN2Y3B4amFtYmtsYWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4Njk2NDQsImV4cCI6MjA4OTQ0NTY0NH0.Ey7IqmYTn7CNBnUsHzq8sXoEuqVtMqqSAUaDigRlNng" \
           -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqamFncWN2Y3B4amFtYmtsYWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4Njk2NDQsImV4cCI6MjA4OTQ0NTY0NH0.Ey7IqmYTn7CNBnUsHzq8sXoEuqVtMqqSAUaDigRlNng"
